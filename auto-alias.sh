@@ -88,15 +88,6 @@ flatpak(){
 	done
 }
 
-# if sudo used
-sudo() {
-	if [[ "$1" == "dnf" ]]; then
-		shift 
-		dnf "$@"
-	else
-		command sudo "$@"
-	fi
-}
 
 # shellcheck source=/home/eem/.bashrc
 [[ -f $ALIAS_FILE ]] && source "$ALIAS_FILE"
