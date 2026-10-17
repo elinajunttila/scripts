@@ -1,17 +1,16 @@
 # asks to set an alias everytime you install something with dnf or flatpak
 #
-ALIAS_FILE="$HOME/.bashrc"
+ALIAS_FILE="$HOME/.bash_aliases"
 
 # lanuch GUI apps independently from the terminal
 __aa_launch() {
-	(("$#" > 0)) || return 0
-	nohup "$@" </dev/null >/dev/null 2>&1 &
-	disown "$!" 2>/dev/null
+	(($#)) || return 0
+	setsid -f -- "$@" </dev/null >/dev/null 2>&1
 }
 
 _ask_alias(){
 	
-	local name quoted_cmd part
+	local name part alias_value
 	local -a command_parts=("$@")
 
 	((${#command_parts[@]})) || return 0
@@ -21,19 +20,29 @@ _ask_alias(){
 	#if name = empty, return
 	[[ -z $name ]] && return 0
 	
-	if alias "$name" &>/dev/null  || grep -q "^alias $name=" "$ALIAS_FILE"2>/dev/null; then echo "Alias '$name' already exists."
-		return 0
+	if alias "$name" &>/dev/null ||
+		grep -Fq "alias $name=" "$ALIAS_FILE" 2>/dev/null; then
+      		echo "Alias '$name' already exists."
+       		return 0
+  	
 	fi
-	
-	quoted_cmd=""
-	for part in "${command_parts[@]}"; do
-		printf -v part '%q' "$part"
-		quoted_cmd+="${quoted_cmd:+ }$part"
-	done
-	printf "alias %s='__aa_launch $quoted_cmd"
 
-	echo "Added: $name -> ${command_parts[*]}"
+
+    	alias_value="__aa_launch"
+  	  for part in "${command_parts[@]}"; do
+       		printf -v part '%q' "$part"
+        	alias_value+=" $part"
+    	done
+
+    	touch "$ALIAS_FILE" || return 1
+    	printf 'alias %s=%q\n' "$name" "$alias_value" >> "$ALIAS_FILE" || return 1
+
+   	# Make the alias available immediately in this shell.
+    	alias "$name"="$alias_value"
+
+    	echo "Added: $name -> ${command_parts[*]}"
 }
+
 
 # for dnf
 dnf(){
