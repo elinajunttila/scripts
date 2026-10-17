@@ -2,71 +2,86 @@
 #
 ALIAS_FILE="$HOME/.bashrc"
 
-_ask_alias(){
-	
-	local target = "$1" name
-	read -rp "Set alias for '$target' (tyhjä = ohita): " name
-	
-	#if name = empty, return
-	[[ -z $name ]] && return
-	
-	if alias "$name" &>/dev/null  || grep -q "^alias $name=" "$ALIAS_FILE"2>/dev/null; then echo "Alias '$name' already exists."
-		return
-	fi
-
-	printf 'alias %s=%q\' "$name" "$target" >>"$ALIAS_FILE"
-
-	alias "%name=$target"
-
-	echo "Added: $name -> $target"
+# lanuch GUI apps independently from the terminal
+__aa_launch() {
+	(("$#" > 0)) || return 0
+	nohup "$@" </dev/null >/dev/null 2>&1 &
+	disown "$!" 2>/dev/null
 }
 
+_ask_alias(){
+	
+	local name quoted_cmd part
+	local -a command_parts=("$@")
+
+	((${#command_parts[@]})) || return 0
+
+	read -rp "Set alias for '${command_parts[*]}' (empty = pass): " name
+	
+	#if name = empty, return
+	[[ -z $name ]] && return 0
+	
+	if alias "$name" &>/dev/null  || grep -q "^alias $name=" "$ALIAS_FILE"2>/dev/null; then echo "Alias '$name' already exists."
+		return 0
+	fi
+	
+	quoted_cmd=""
+	for part in "${command_parts[@]}"; do
+		printf -v part '%q' "$part"
+		quoted_cmd+="${quoted_cmd:+ }$part"
+	done
+	printf "alias %s='__aa_launch $quoted_cmd"
+
+	echo "Added: $name -> ${command_parts[*]}"
+}
+
+# for dnf
 dnf(){
-	if [[ $1 != install ]]; then
+	if [[ "$1" != "install" ]]; then
 		command dnf "$@"
-		return
+		return $?
 	fi
 
-	command sudo dnf "$@" || return
-
+	command dnf "$@" || return $?
 	shift
 
 	local pkg cmd
-
 	for pkg in "$@"; do
 		# skip flags
-		[[ %pkg == -* ]] && continue
+		[[ "$pkg" == -* ]] && continue
+		[[ "$pkg" == *=* ]] && continue
 
-		cmd = "$pkg"
-
-		if ! command -v "$pkg" &>/dev/null; then
-			read -rp "Command '$pkg' not found. What is the program command? (empty = skip): "
-			[[ -z $cmd ]] && continue
+		cmd="$pkg"
+		if ! command -v "$pkg" >/dev/null 2>&1; then
+			read -rp "Command for '$pkg' (empty = skip): "
+			[[ -z "$cmd" ]] && continue
 		fi
 		
 		_ask_alias "$cmd"
 	done
 }
 
+# for flatpak
 flatpak(){
 
-	command flatpak "$@" || return
-
-	[[ $1 == install ]] || return
-
+	command flatpak "$@" || return $?
+	[[ "$1" == "install" ]] || return 0
 	shift
 
 	local arg
 	for arg in "$@"; do
-		if [[ $arg =~ ^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$ ]]; then
-
+		# skip flags and repo-urls
+		[[ "$arg" == -* || "$arg" == *://* ]] && continue
+		
+		if [[ "$arg" =~ ^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$ ]]; then
 			_ask_alias "flatpak run $arg"
 		fi
 	done
 }
 
-sudo(){
-	if [[ $1 == dnf ]]; then
+# if sudo used
+sudo() {
+	if [[ "$1" == "dnf" ]]; then
 		shift 
 		dnf "$@"
 	else
@@ -74,5 +89,6 @@ sudo(){
 	fi
 }
 
+# shellcheck source=/home/eem/.bashrc
 [[ -f $ALIAS_FILE ]] && source "$ALIAS_FILE"
 
