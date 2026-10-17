@@ -37,37 +37,11 @@ _ask_alias(){
     	touch "$ALIAS_FILE" || return 1
     	printf 'alias %s=%q\n' "$name" "$alias_value" >> "$ALIAS_FILE" || return 1
 
-   	# Make the alias available immediately in this shell.
+   	# make the alias available immediately in this shell
+	# shellcheck disable=SC2139
     	alias "$name"="$alias_value"
 
     	echo "Added: $name -> ${command_parts[*]}"
-}
-
-
-# for dnf
-dnf(){
-	if [[ "$1" != "install" ]]; then
-		command dnf "$@"
-		return $?
-	fi
-
-	command dnf "$@" || return $?
-	shift
-
-	local pkg cmd
-	for pkg in "$@"; do
-		# skip flags
-		[[ "$pkg" == -* ]] && continue
-		[[ "$pkg" == *=* ]] && continue
-
-		cmd="$pkg"
-		if ! command -v "$pkg" >/dev/null 2>&1; then
-			read -rp "Command for '$pkg' (empty = skip): "
-			[[ -z "$cmd" ]] && continue
-		fi
-		
-		_ask_alias "$cmd"
-	done
 }
 
 # for flatpak
